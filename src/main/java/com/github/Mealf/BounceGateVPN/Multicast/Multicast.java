@@ -24,13 +24,16 @@ public class Multicast {
 		this.packet = packet;
 		analysis.setFramePacket(packet);
 
-		if (!analysis.compareChecksum()) {
+		if ((packet[30] & 0xF0) != 0xe0 || !analysis.compareChecksum()) {
 			type = MulticastType.NULL;
 			return;
 		}
 		if (isIGMPPacket()) {
-			type = MulticastType.IGMP;
-			IGMPhandler();
+			if (compareIGMPChecksum()) {
+				type = MulticastType.IGMP;
+				IGMPhandler();
+			} else
+				type = MulticastType.NULL;
 		} else
 			type = MulticastType.MULTICAST;
 	}
@@ -108,13 +111,10 @@ public class Multicast {
 			// join group
 			if (recordType == 0x04) {
 				JoinGroup(GroupAddress);
-				System.out.println(String.format("join group %x.%x.%x.%x", GroupAddress[0], GroupAddress[1],
-						GroupAddress[2], GroupAddress[3]));
 			}
 			// leave group
 			if (recordType == 0x03) {
 				LeaveGroup(GroupAddress);
-				System.out.println("leave group");
 			}
 		}
 	}
@@ -125,22 +125,15 @@ public class Multicast {
 			if (group.get(group_ip) == null)
 				group.put(group_ip, new ArrayList<host>());
 			byte[] src_ip = ConvertIP(analysis.getSrcIPaddress());
-			
-			//already join
+
+			// already join
 			ArrayList<host> g = group.get(group_ip);
 			for (int i = 0; i < g.size(); i++)
 				if (Arrays.equals(g.get(i).ipaddr, src_ip))
 					return;
-			
+
 			group.get(group_ip).add(new host(src_ip));
 		}
-
-		for (int i = 0; i < group.get(group_ip).size(); i++) {
-			System.out.println(String.format("%x.%x.%x.%x", group.get(group_ip).get(i).ipaddr[0],
-					group.get(group_ip).get(i).ipaddr[1], group.get(group_ip).get(i).ipaddr[2],
-					group.get(group_ip).get(i).ipaddr[3]));
-		}
-
 	}
 
 	private void LeaveGroup(byte[] GroupAddress) {
@@ -154,6 +147,33 @@ public class Multicast {
 						g.remove(i);
 			}
 		}
+	}
+
+	private boolean compareIGMPChecksum() {
+		int IP_header_length = (packet[14] & 0xF) * 4;
+		int total_len = (packet[16] & 0xFF) << 8 | (packet[17] & 0xFF);
+		int IGMP_pos = 14 + IP_header_length;
+		int IGMP_len = total_len - IP_header_length;
+		int sum = 0;
+		for (int i = IGMP_pos; i < IGMP_pos + IGMP_len; i += 2) {
+			if (i == IGMP_pos + 2)
+				continue;
+			if (i + 1 == packet.length)
+				sum += (packet[i] & 0xFF) << 8;
+			else
+				sum += (packet[i] & 0xFF) << 8 | (packet[i + 1] & 0xFF);
+		}
+		sum = ((sum & 0x00FF0000) >> 16) + (sum & 0x0000FFFF);
+		sum = ~sum;
+		if ((short) sum == getChecksum())
+			return true;
+		return false;
+	}
+
+	private short getChecksum() {
+		int IP_header_length = (packet[14] & 0xF) * 4;
+		int IGMP_pos = 14 + IP_header_length;
+		return (short) ((packet[IGMP_pos + 2] & 0xFF) << 8 | (packet[IGMP_pos + 3] & 0xFF));
 	}
 
 	private int ConvertIP(byte[] ipaddr) {
