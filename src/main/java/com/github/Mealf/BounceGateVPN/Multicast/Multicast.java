@@ -6,25 +6,27 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import com.github.smallru8.driver.tuntap.Analysis;
-
 public class Multicast {
 	Map<Integer, ArrayList<host>> group;
-	Analysis analysis;
+	IGMPAnalysis analysis;
 	byte[] packet;
-	MulticastType type;
+	//MulticastType type;
 
 	public Multicast() {
 		group = new HashMap<Integer, ArrayList<host>>();
-		analysis = new Analysis();
-		type = MulticastType.NULL;
+		analysis = new IGMPAnalysis();
+		//type = MulticastType.NULL;
 	}
 
 	public void setPacket(byte[] packet) {
 		this.packet = packet;
 		analysis.setFramePacket(packet);
-
-		if ((packet[30] & 0xF0) != 0xe0 || !analysis.compareChecksum()) {
+		
+		if(analysis.getType() == MulticastType.NULL)
+			return;
+		if(analysis.getType() == MulticastType.IGMP)
+			IGMPhandler();
+		/*if ((packet[30] & 0xF0) != 0xe0 || !analysis.compareChecksum()) {
 			type = MulticastType.NULL;
 			return;
 		}
@@ -35,14 +37,16 @@ public class Multicast {
 			} else
 				type = MulticastType.NULL;
 		} else
-			type = MulticastType.MULTICAST;
+			type = MulticastType.MULTICAST;*/
 	}
 
 	public MulticastType getType() {
-		return type;
+		return analysis.getType();
 	}
 
 	public ArrayList<byte[]> getIPinGroup() {
+		if (analysis.getType() == MulticastType.NULL)
+			return null;
 		int group_ip = analysis.getDesIPaddress();
 		ArrayList<byte[]> IP_in_group = new ArrayList<byte[]>();
 		ArrayList<host> hosts = group.get(group_ip);
@@ -59,7 +63,7 @@ public class Multicast {
 	}
 
 	private void IGMPhandler() {
-		if (type != MulticastType.IGMP)
+		if (analysis.getType() != MulticastType.IGMP)
 			return;
 
 		int IP_header_length = (packet[14] & 0xF) * 4;
@@ -119,6 +123,27 @@ public class Multicast {
 		}
 	}
 
+	/*public byte[] GeneralQuery(byte[] desMAC, int groupIP, int version) {
+		byte[] packet = hex2Byte("0000000000000000000000004600002032e40000010200000000000000000000940400001164000000000000");
+		analysis.setFramePacket(packet);
+		analysis.setChecksum();
+		this.packet = analysis.getFramePacket();
+		/*short IGMPChecksum = calculateIGMPChecksum();
+		this.packet[40] = (byte) ((IGMPChecksum >> 4));
+		this.packet[41] = (byte) ((IGMPChecksum & 0xFF));*/
+		
+		/*fill desMAC
+		for(int i=0;i<6;i++)
+			this.packet[i] = desMAC[i];
+		
+		for(int i=0;i<4;i++) {
+			this.packet[32-i] = (byte)(groupIP%256);
+			this.packet[45-i] = (byte)(groupIP%256);
+			groupIP/=256;
+		}
+		return this.packet;
+	}*/
+
 	private void JoinGroup(byte[] GroupAddress) {
 		int group_ip = ConvertIP(GroupAddress);
 		if (group_ip != -1) {
@@ -149,7 +174,13 @@ public class Multicast {
 		}
 	}
 
-	private boolean compareIGMPChecksum() {
+	/*private boolean compareIGMPChecksum() {
+		if (calculateIGMPChecksum() == getChecksum())
+			return true;
+		return false;
+	}
+	
+	private short calculateIGMPChecksum() {
 		int IP_header_length = (packet[14] & 0xF) * 4;
 		int total_len = (packet[16] & 0xFF) << 8 | (packet[17] & 0xFF);
 		int IGMP_pos = 14 + IP_header_length;
@@ -165,16 +196,14 @@ public class Multicast {
 		}
 		sum = ((sum & 0x00FF0000) >> 16) + (sum & 0x0000FFFF);
 		sum = ~sum;
-		if ((short) sum == getChecksum())
-			return true;
-		return false;
+		return (short)sum;
 	}
 
 	private short getChecksum() {
 		int IP_header_length = (packet[14] & 0xF) * 4;
 		int IGMP_pos = 14 + IP_header_length;
 		return (short) ((packet[IGMP_pos + 2] & 0xFF) << 8 | (packet[IGMP_pos + 3] & 0xFF));
-	}
+	}*/
 
 	private int ConvertIP(byte[] ipaddr) {
 		int ip = 0;
@@ -194,12 +223,19 @@ public class Multicast {
 		return ip;
 	}
 
-	public boolean isIGMPPacket() {
+	/*private byte[] hex2Byte(String hexString) {
+		byte[] bytes = new byte[hexString.length() / 2];
+		for (int i = 0; i < bytes.length; i++)
+			bytes[i] = (byte) Integer.parseInt(hexString.substring(2 * i, 2 * i + 2), 16);
+		return bytes;
+	}*/
+
+	/*public boolean isIGMPPacket() {
 		if (packet == null)
 			return false;
 
 		if (packet.length >= 24 && packet[23] == 0x02)
 			return true;
 		return false;
-	}
+	}*/
 }
