@@ -17,6 +17,14 @@
     <maven.compiler.source>1.7</maven.compiler.source>
     <maven.compiler.target>1.7</maven.compiler.target>
   </properties>
+  
+  <repositories>
+  	<repository>
+  		<id>BounceGateVPN</id>
+  		<name>BounceGateVPN</name>
+  		<url>https://raw.github.com/BounceGateVPN/mvn-repo/master</url>
+  	</repository>
+  </repositories>
 
   <dependencies>
     <dependency>
@@ -24,6 +32,11 @@
       <artifactId>junit</artifactId>
       <version>4.11</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.github.smallru8</groupId>
+      <artifactId>TunTap4J</artifactId>
+      <version>2.2</version>
     </dependency>
   </dependencies>
 
