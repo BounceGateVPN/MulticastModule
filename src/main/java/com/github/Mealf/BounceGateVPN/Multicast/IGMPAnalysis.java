@@ -97,7 +97,7 @@ public class IGMPAnalysis extends Analysis {
 	 * @return boolean
 	 */
 	public boolean compareIGMPChecksum() {
-		if (calculateIGMPChecksum() == getChecksum())
+		if (calculateIGMPChecksum() == getIGMPChecksum())
 			return true;
 		return false;
 	}
