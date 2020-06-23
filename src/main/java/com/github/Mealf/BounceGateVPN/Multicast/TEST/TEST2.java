@@ -23,6 +23,16 @@ public class TEST2 {
 	    }
 	    sb.append("]");
 	    System.out.println(sb);
+	    
+	    packet = analysis.generalQuery("224.0.0.1", 2);
+    	td.write(packet);
+    	sb = new StringBuilder();
+	    sb.append("[ ");
+	    for (byte b : packet) {
+	        sb.append(String.format("%02X ", b));
+	    }
+	    sb.append("]");
+	    System.out.println(sb);
     	while(true);
 	}
 

@@ -107,7 +107,7 @@ public class IGMPAnalysis extends Analysis {
 	 * 
 	 * @param groupIP
 	 * @param version
-	 * @return
+	 * @return byte[]
 	 */
 	public byte[] generalQuery(int groupIP, int version) {
 		if (version == 2)
@@ -136,8 +136,22 @@ public class IGMPAnalysis extends Analysis {
 		short IGMPChecksum = calculateIGMPChecksum();
 		this.packet[40] = (byte) ((IGMPChecksum >> 8) & 0xFF);
 		this.packet[41] = (byte) ((IGMPChecksum & 0xFF));
-		
+
 		return this.packet;
+	}
+
+	public byte[] generalQuery(String groupIP, int version) {
+		int IPNumber = 0;
+		String[] parts = groupIP.split("\\.");
+		if (parts.length != 4)
+			return null;
+		
+		//Convert String to Integer
+		for (int i = 0; i < 4; i++) {
+			IPNumber = IPNumber << 8;
+			IPNumber = IPNumber | Integer.parseInt(parts[i]);
+		}
+		return generalQuery(IPNumber, version);
 	}
 
 	/**

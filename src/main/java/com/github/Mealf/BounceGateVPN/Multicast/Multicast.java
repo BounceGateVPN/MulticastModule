@@ -174,6 +174,10 @@ public class Multicast {
 			}
 		}
 	}
+	
+	public void autoDeleteMember() {
+		
+	}
 
 	private int ConvertIP(byte[] ipaddr) {
 		int ip = 0;

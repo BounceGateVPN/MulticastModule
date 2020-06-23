@@ -13,6 +13,7 @@ public class TEST1 {
 		byte[] val;
 		Multicast multicast = new Multicast();
 		Scanner scanner = new Scanner(System.in);
+		System.out.println("輸入封包內容(hex steam)");
 		while (true) {
 			if (!scanner.hasNextLine())
 				continue;
@@ -41,6 +42,7 @@ public class TEST1 {
 					}
 				}
 			}
+			System.out.println("輸入封包內容(hex steam)");
 		}
 	}
 }
