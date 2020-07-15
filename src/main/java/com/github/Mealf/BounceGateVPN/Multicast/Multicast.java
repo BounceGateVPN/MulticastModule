@@ -2,9 +2,12 @@ package com.github.Mealf.BounceGateVPN.Multicast;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+
+import com.github.Mealf.util.ConvertIP;
 
 public class Multicast {
 	Map<Integer, ArrayList<host>> groupV2, groupV3;
@@ -13,6 +16,8 @@ public class Multicast {
 	boolean queryFlag;
 	String routerIP;
 	byte[] routerMAC;
+	Date delete_member_runable_time;
+	final int INTERVAL_OF_RUNABLE_TIME = 60 * 1000;
 
 	public Multicast() {
 		groupV2 = new HashMap<Integer, ArrayList<host>>();
@@ -82,11 +87,23 @@ public class Multicast {
 		return IP_in_group;
 	}
 
+	public boolean isSpecialAddress() {
+		if (packet[0] == -32 && packet[1] == 0 && packet[2] == 0)
+			return true;
+		return false;
+	}
+
 	// 生成Group IP為224.0.0.1的query
 	public byte[] generateQuery(int version) {
 		/*
 		 * if(queryFlag == false) return null;
 		 */
+		Date now = new Date();
+		if (delete_member_runable_time.after(now)) {
+			delete_member_runable_time.setTime(now.getTime() + INTERVAL_OF_RUNABLE_TIME);
+			autoDeleteMember();
+		}
+
 		System.out.println("generate Query!");
 		return analysis.generateQuery(routerIP, routerMAC, "224.0.0.1", version);
 	}
@@ -112,15 +129,17 @@ public class Multicast {
 
 			// Version 1
 			if (IGMP_length == 8 && MaxRespTime == 0) {
-
 			}
 			// Version 2
 			if (IGMP_length == 8 && MaxRespTime != 0) {
-
+				Date now = new Date();
+				if (delete_member_runable_time.before(now)) {
+					delete_member_runable_time.setTime(now.getTime() + INTERVAL_OF_RUNABLE_TIME);
+					autoDeleteMember();
+				}
 			}
 			// Version 3
 			if (IGMP_length >= 12) {
-
 			}
 		}
 
@@ -180,13 +199,17 @@ public class Multicast {
 			// already join
 			ArrayList<host> g = group.get(group_ip);
 			for (int i = 0; i < g.size(); i++)
-				if (Arrays.equals(g.get(i).ipaddr, src_ip))
+				// flag recover
+				if (Arrays.equals(g.get(i).ipaddr, src_ip)) {
+					g.get(i).flag = true;
 					return;
+				}
 
 			group.get(group_ip).add(new host(src_ip));
 		}
 	}
 
+	// 離開group
 	private void LeaveGroup(byte[] GroupAddress, int version) {
 		int group_ip = ConvertIP.toInt(GroupAddress);
 		Map<Integer, ArrayList<host>> group;
@@ -196,7 +219,7 @@ public class Multicast {
 			group = groupV3;
 		else
 			return;
-		
+
 		if (group_ip != -1) {
 			if (group.get(group_ip) != null) {
 				byte[] src_ip = ConvertIP.toByteArray(analysis.getSrcIPaddress());
@@ -204,26 +227,35 @@ public class Multicast {
 				for (int i = 0; i < g.size(); i++)
 					if (Arrays.equals(g.get(i).ipaddr, src_ip)) {
 						g.remove(i);
-						if(g.isEmpty())
+						if (g.isEmpty())
 							group.remove(group_ip);
 					}
 			}
-			if(groupV2.isEmpty()) {
+			if (groupV2.isEmpty()) {
 				System.out.println("empty");
 				queryFlag = false;
 			}
 		}
 	}
-	
-	public void autoDeleteMember() {
-		
-	}
 
-	private int ConvertIP(byte[] ipaddr) {
-	}
-
-	private byte[] ConvertIP(int ipaddr) {
-		byte[] ip = new byte[4];
+	// remove members with false flags
+	private void autoDeleteMember() {
+		for (Map.Entry<Integer, ArrayList<host>> entry : groupV2.entrySet()) {
+			ArrayList<host> list = entry.getValue();
+			for (int i = 0; i < list.size(); i++) {
+				if (!list.get(i).flag) {
+					list.remove(i);
+					i--;
+				} else {
+					list.get(i).flag = false;
+				}
+			}
+			if (list.isEmpty())
+				groupV2.remove(entry.getKey());
+		}
+		if (groupV2.isEmpty()) {
+			System.out.println("empty");
+			queryFlag = false;
 		}
 	}
 }

@@ -23,5 +23,6 @@
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="lib" path="/home/1063030/mvn-repo/com/github/smallru8/util/1.2/util-1.2.jar"/>
 	<classpathentry kind="output" path="target/classes"/>
 </classpath>
