@@ -11,14 +11,25 @@ public class Multicast {
 	IGMPAnalysis analysis;
 	byte[] packet;
 	boolean queryFlag;
+	String routerIP;
+	byte[] routerMAC;
 
 	public Multicast() {
 		groupV2 = new HashMap<Integer, ArrayList<host>>();
 		groupV3 = new HashMap<Integer, ArrayList<host>>();
 		analysis = new IGMPAnalysis();
 		queryFlag = false;
+		routerIP = "";
+		routerMAC = null;
+		delete_member_runable_time = new Date();
 	}
 
+	public Multicast(String routerIP) {
+		this();
+		this.routerIP = routerIP;
+	}
+
+	// 設定封包
 	public void setPacket(byte[] packet) {
 		this.packet = packet;
 		analysis.setFramePacket(packet);
@@ -29,10 +40,20 @@ public class Multicast {
 			IGMPhandler();
 	}
 
+	public void setRouterIP(String routerIP) {
+		this.routerIP = routerIP;
+	}
+
+	public void setRouterMAC(byte[] routerMAC) {
+		this.routerMAC = routerMAC;
+	}
+
+	// 取得封包類型
 	public MulticastType getType() {
 		return analysis.getType();
 	}
 
+	// 取得group內成員IP
 	public ArrayList<byte[]> getIPinGroup() {
 		if (analysis.getType() == MulticastType.NULL)
 			return null;
@@ -61,6 +82,21 @@ public class Multicast {
 		return IP_in_group;
 	}
 
+	// 生成Group IP為224.0.0.1的query
+	public byte[] generateQuery(int version) {
+		/*
+		 * if(queryFlag == false) return null;
+		 */
+		System.out.println("generate Query!");
+		return analysis.generateQuery(routerIP, routerMAC, "224.0.0.1", version);
+	}
+
+	// 生成特定Group IP的query
+	public byte[] generateQuery(String groupIP, int version) {
+		return analysis.generateQuery(routerIP, routerMAC, groupIP, version);
+	}
+
+	// 處理IGMP封包
 	private void IGMPhandler() {
 		if (analysis.getType() != MulticastType.IGMP)
 			return;
@@ -122,12 +158,16 @@ public class Multicast {
 		}
 	}
 
+	// 加入group
 	private void JoinGroup(byte[] GroupAddress, int version) {
-		int group_ip = ConvertIP(GroupAddress);
+		System.out.println(
+				ConvertIP.toString(analysis.getSrcIPaddress()) + " join group :" + ConvertIP.toString(GroupAddress));
+		int group_ip = ConvertIP.toInt(GroupAddress);
 		Map<Integer, ArrayList<host>> group;
-		if (version == 2)
+		if (version == 2) {
+			queryFlag = true;
 			group = groupV2;
-		else if (version == 3)
+		} else if (version == 3)
 			group = groupV3;
 		else
 			return;
@@ -135,7 +175,7 @@ public class Multicast {
 		if (group_ip != -1) {
 			if (group.get(group_ip) == null)
 				group.put(group_ip, new ArrayList<host>());
-			byte[] src_ip = ConvertIP(analysis.getSrcIPaddress());
+			byte[] src_ip = ConvertIP.toByteArray(analysis.getSrcIPaddress());
 
 			// already join
 			ArrayList<host> g = group.get(group_ip);
@@ -148,7 +188,7 @@ public class Multicast {
 	}
 
 	private void LeaveGroup(byte[] GroupAddress, int version) {
-		int group_ip = ConvertIP(GroupAddress);
+		int group_ip = ConvertIP.toInt(GroupAddress);
 		Map<Integer, ArrayList<host>> group;
 		if (version == 2)
 			group = groupV2;
@@ -159,7 +199,7 @@ public class Multicast {
 		
 		if (group_ip != -1) {
 			if (group.get(group_ip) != null) {
-				byte[] src_ip = ConvertIP(analysis.getSrcIPaddress());
+				byte[] src_ip = ConvertIP.toByteArray(analysis.getSrcIPaddress());
 				ArrayList<host> g = group.get(group_ip);
 				for (int i = 0; i < g.size(); i++)
 					if (Arrays.equals(g.get(i).ipaddr, src_ip)) {
@@ -180,20 +220,10 @@ public class Multicast {
 	}
 
 	private int ConvertIP(byte[] ipaddr) {
-		int ip = 0;
-		if (ipaddr.length != 4)
-			return -1;
-
-		ip = (ipaddr[0] & 0xFF) << 24 | (ipaddr[1] & 0xFF) << 16 | (ipaddr[2] & 0xFF) << 8 | (ipaddr[3] & 0xFF);
-		return ip;
 	}
 
 	private byte[] ConvertIP(int ipaddr) {
 		byte[] ip = new byte[4];
-		for (int i = 3; i >= 0; i--) {
-			ip[i] = (byte) (ipaddr & 0xFF);
-			ipaddr = ipaddr >> 8;
 		}
-		return ip;
 	}
 }

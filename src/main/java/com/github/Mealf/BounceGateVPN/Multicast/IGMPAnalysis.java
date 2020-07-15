@@ -1,5 +1,6 @@
 package com.github.Mealf.BounceGateVPN.Multicast;
 
+import com.github.Mealf.util.ConvertIP;
 import com.github.smallru8.driver.tuntap.Analysis;
 
 public class IGMPAnalysis extends Analysis {
@@ -28,6 +29,7 @@ public class IGMPAnalysis extends Analysis {
 		super.setFramePacket(data);
 		if ((packet[30] & 0xF0) != 0xe0 || !compareChecksum()) {
 			type = MulticastType.NULL;
+			return;
 		}
 		if (isIGMPPacket()) {
 			if (compareIGMPChecksum()) {
@@ -37,6 +39,7 @@ public class IGMPAnalysis extends Analysis {
 		} else
 			type = MulticastType.MULTICAST;
 
+		return;
 	}
 
 	/**
@@ -109,13 +112,26 @@ public class IGMPAnalysis extends Analysis {
 	 * @param version
 	 * @return byte[]
 	 */
-	public byte[] generalQuery(int groupIP, int version) {
+	public byte[] generateQuery(int srcIP, byte[] srcMAC, int groupIP, int version) {
 		if (version == 2)
 			packet = hex2Byte(
 					"00000000000000000000000008004600002032e40000010200000000000000000000940400001164000000000000");
 		else
 			packet = hex2Byte(
 					"00000000000000000000000008004600002432e400000102000000000000000000009404000011A200000000000018000000");
+
+		/* fill srcIP*/
+		for (int i = 0; i < 4; i++) {
+			byte rightmostByte = (byte) (srcIP & 0xFF);
+			this.packet[29 - i] = rightmostByte;
+			srcIP = srcIP >> 8;
+		}
+		
+		if(srcMAC != null) {
+			for(int i=0;i<6;i++) {
+				this.packet[6+i] = srcMAC[i];
+			}
+		}
 
 		/* fill MAC, desIP and groupID */
 		for (int i = 0; i < 4; i++) {
@@ -140,18 +156,16 @@ public class IGMPAnalysis extends Analysis {
 		return this.packet;
 	}
 
-	public byte[] generalQuery(String groupIP, int version) {
-		int IPNumber = 0;
-		String[] parts = groupIP.split("\\.");
-		if (parts.length != 4)
-			return null;
+	public byte[] generateQuery(String srcIP, byte[] srcMAC, String groupIP, int version) {
+		int IPNumber = 0, srcIP_int = 0;
+		IPNumber = ConvertIP.toInt(groupIP);
+		srcIP_int = ConvertIP.toInt(srcIP);
 		
-		//Convert String to Integer
-		for (int i = 0; i < 4; i++) {
-			IPNumber = IPNumber << 8;
-			IPNumber = IPNumber | Integer.parseInt(parts[i]);
-		}
-		return generalQuery(IPNumber, version);
+		/*if(IPNumber == 0 || srcIP_int == 0)
+			return null;
+		*/
+
+		return generateQuery(srcIP_int, srcMAC, IPNumber, version);
 	}
 
 	/**
