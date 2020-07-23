@@ -2,66 +2,124 @@ package com.github.Mealf.BounceGateVPN.Multicast;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
+import com.github.Mealf.util.ConvertIP;
+
 public class Multicast {
-	Map<Integer, ArrayList<host>> group;
+	Map<Integer, ArrayList<host>> groupV2, groupV3;
 	IGMPAnalysis analysis;
 	byte[] packet;
-	//MulticastType type;
+	boolean queryFlag;
+	String routerIP;
+	byte[] routerMAC;
+	Date delete_member_runable_time;
+	Date query_sendable_time;
+	final int INTERVAL_OF_RUNABLE_TIME = 60 * 1000;
+	final int INTERVAL_OF_WAIT_OTHER_QUERY = 120 * 1000;
 
 	public Multicast() {
-		group = new HashMap<Integer, ArrayList<host>>();
+		groupV2 = new HashMap<Integer, ArrayList<host>>();
+		groupV3 = new HashMap<Integer, ArrayList<host>>();
 		analysis = new IGMPAnalysis();
-		//type = MulticastType.NULL;
+		queryFlag = false;
+		routerIP = "";
+		routerMAC = null;
+		delete_member_runable_time = new Date();
+		query_sendable_time = new Date();
 	}
 
+	public Multicast(String routerIP) {
+		this();
+		this.routerIP = routerIP;
+	}
+
+	// 設定封包
 	public void setPacket(byte[] packet) {
 		this.packet = packet;
 		analysis.setFramePacket(packet);
-		
-		if(analysis.getType() == MulticastType.NULL)
+
+		if (analysis.getType() == MulticastType.NULL)
 			return;
-		if(analysis.getType() == MulticastType.IGMP)
+		if (analysis.getType() == MulticastType.IGMP)
 			IGMPhandler();
-		/*if ((packet[30] & 0xF0) != 0xe0 || !analysis.compareChecksum()) {
-			type = MulticastType.NULL;
-			return;
-		}
-		if (isIGMPPacket()) {
-			if (compareIGMPChecksum()) {
-				type = MulticastType.IGMP;
-				IGMPhandler();
-			} else
-				type = MulticastType.NULL;
-		} else
-			type = MulticastType.MULTICAST;*/
 	}
 
+	public void setRouterIP(String routerIP) {
+		this.routerIP = routerIP;
+	}
+
+	public void setRouterMAC(byte[] routerMAC) {
+		this.routerMAC = routerMAC;
+	}
+
+	// 取得封包類型
 	public MulticastType getType() {
 		return analysis.getType();
 	}
 
+	// 取得group內成員IP
 	public ArrayList<byte[]> getIPinGroup() {
 		if (analysis.getType() == MulticastType.NULL)
 			return null;
 		int group_ip = analysis.getDesIPaddress();
 		ArrayList<byte[]> IP_in_group = new ArrayList<byte[]>();
-		ArrayList<host> hosts = group.get(group_ip);
-		if (hosts == null || hosts.size() == 0)
-			return null;
-		Iterator<host> iterator = hosts.iterator();
 
-		while (iterator.hasNext()) {
-			IP_in_group.add(iterator.next().ipaddr);
+		// get IGMPv2 member
+		ArrayList<host> hosts = groupV2.get(group_ip);
+		Iterator<host> iterator;
+		if (hosts != null) {
+			iterator = hosts.iterator();
+			while (iterator.hasNext())
+				IP_in_group.add(iterator.next().ipaddr);
 		}
+
+		// get IGMPv2 member
+		hosts = groupV3.get(group_ip);
+		if (hosts != null) {
+			iterator = hosts.iterator();
+			while (iterator.hasNext())
+				IP_in_group.add(iterator.next().ipaddr);
+		}
+
 		if (IP_in_group.isEmpty())
 			return null;
 		return IP_in_group;
 	}
 
+	public boolean isSpecialAddress() {
+		if (packet[0] == -32 && packet[1] == 0 && packet[2] == 0)
+			return true;
+		return false;
+	}
+
+	// 生成Group IP為224.0.0.1的query
+	public byte[] generateQuery(int version) {
+
+		if (queryFlag == false)
+			return null;
+
+		Date now = new Date();
+		if (query_sendable_time.before(now))
+			return null;
+		if (delete_member_runable_time.after(now)) {
+			delete_member_runable_time.setTime(now.getTime() + INTERVAL_OF_RUNABLE_TIME);
+			autoDeleteMember();
+		}
+
+		System.out.println("generate Query!");
+		return analysis.generateQuery(routerIP, routerMAC, "224.0.0.1", version);
+	}
+
+	// 生成特定Group IP的query
+	public byte[] generateQuery(String groupIP, int version) {
+		return analysis.generateQuery(routerIP, routerMAC, groupIP, version);
+	}
+
+	// 處理IGMP封包
 	private void IGMPhandler() {
 		if (analysis.getType() != MulticastType.IGMP)
 			return;
@@ -77,34 +135,39 @@ public class Multicast {
 
 			// Version 1
 			if (IGMP_length == 8 && MaxRespTime == 0) {
-
 			}
 			// Version 2
 			if (IGMP_length == 8 && MaxRespTime != 0) {
+				Date now = new Date();
+				if (delete_member_runable_time.before(now)) {
+					delete_member_runable_time.setTime(now.getTime() + INTERVAL_OF_RUNABLE_TIME);
+					autoDeleteMember();
+				}
 
+				if (analysis.getSrcIPaddress() < ConvertIP.toInt(routerIP))
+					query_sendable_time.setTime(now.getTime() + INTERVAL_OF_WAIT_OTHER_QUERY);
 			}
 			// Version 3
 			if (IGMP_length >= 12) {
-
 			}
 		}
 
 		// Version 1 Membership Report
 		if (IGMP_type == 0x12) {
 			byte[] GroupAddress = Arrays.copyOfRange(packet, IGMP_pos + 4, IGMP_pos + 8);
-			JoinGroup(GroupAddress);
+			JoinGroup(GroupAddress, 2);
 		}
 
 		// Version 2 Membership Report
 		if (IGMP_type == 0x16) {
 			byte[] GroupAddress = Arrays.copyOfRange(packet, IGMP_pos + 4, IGMP_pos + 8);
-			JoinGroup(GroupAddress);
+			JoinGroup(GroupAddress, 2);
 		}
 
 		// Version 2 Leave Group
 		if (IGMP_type == 0x17) {
 			byte[] GroupAddress = Arrays.copyOfRange(packet, IGMP_pos + 4, IGMP_pos + 8);
-			LeaveGroup(GroupAddress);
+			LeaveGroup(GroupAddress, 2);
 		}
 
 		// Version 3 Membership Report
@@ -114,128 +177,94 @@ public class Multicast {
 
 			// join group
 			if (recordType == 0x04) {
-				JoinGroup(GroupAddress);
+				JoinGroup(GroupAddress, 3);
 			}
 			// leave group
 			if (recordType == 0x03) {
-				LeaveGroup(GroupAddress);
+				LeaveGroup(GroupAddress, 3);
 			}
 		}
 	}
 
-	/*public byte[] GeneralQuery(byte[] desMAC, int groupIP, int version) {
-		byte[] packet = hex2Byte("0000000000000000000000004600002032e40000010200000000000000000000940400001164000000000000");
-		analysis.setFramePacket(packet);
-		analysis.setChecksum();
-		this.packet = analysis.getFramePacket();
-		/*short IGMPChecksum = calculateIGMPChecksum();
-		this.packet[40] = (byte) ((IGMPChecksum >> 4));
-		this.packet[41] = (byte) ((IGMPChecksum & 0xFF));*/
-		
-		/*fill desMAC
-		for(int i=0;i<6;i++)
-			this.packet[i] = desMAC[i];
-		
-		for(int i=0;i<4;i++) {
-			this.packet[32-i] = (byte)(groupIP%256);
-			this.packet[45-i] = (byte)(groupIP%256);
-			groupIP/=256;
-		}
-		return this.packet;
-	}*/
+	// 加入group
+	private void JoinGroup(byte[] GroupAddress, int version) {
+		System.out.println(
+				ConvertIP.toString(analysis.getSrcIPaddress()) + " join group :" + ConvertIP.toString(GroupAddress));
+		int group_ip = ConvertIP.toInt(GroupAddress);
+		Map<Integer, ArrayList<host>> group;
+		if (version == 2) {
+			queryFlag = true;
+			group = groupV2;
+		} else if (version == 3)
+			group = groupV3;
+		else
+			return;
 
-	private void JoinGroup(byte[] GroupAddress) {
-		int group_ip = ConvertIP(GroupAddress);
 		if (group_ip != -1) {
 			if (group.get(group_ip) == null)
 				group.put(group_ip, new ArrayList<host>());
-			byte[] src_ip = ConvertIP(analysis.getSrcIPaddress());
+			byte[] src_ip = ConvertIP.toByteArray(analysis.getSrcIPaddress());
 
 			// already join
 			ArrayList<host> g = group.get(group_ip);
 			for (int i = 0; i < g.size(); i++)
-				if (Arrays.equals(g.get(i).ipaddr, src_ip))
+				// flag recover
+				if (Arrays.equals(g.get(i).ipaddr, src_ip)) {
+					g.get(i).flag = true;
 					return;
+				}
 
 			group.get(group_ip).add(new host(src_ip));
 		}
 	}
 
-	private void LeaveGroup(byte[] GroupAddress) {
-		int group_ip = ConvertIP(GroupAddress);
+	// 離開group
+	private void LeaveGroup(byte[] GroupAddress, int version) {
+		int group_ip = ConvertIP.toInt(GroupAddress);
+		Map<Integer, ArrayList<host>> group;
+		if (version == 2)
+			group = groupV2;
+		else if (version == 3)
+			group = groupV3;
+		else
+			return;
+
 		if (group_ip != -1) {
 			if (group.get(group_ip) != null) {
-				byte[] src_ip = ConvertIP(analysis.getSrcIPaddress());
+				byte[] src_ip = ConvertIP.toByteArray(analysis.getSrcIPaddress());
 				ArrayList<host> g = group.get(group_ip);
 				for (int i = 0; i < g.size(); i++)
-					if (Arrays.equals(g.get(i).ipaddr, src_ip))
+					if (Arrays.equals(g.get(i).ipaddr, src_ip)) {
 						g.remove(i);
+						if (g.isEmpty())
+							group.remove(group_ip);
+					}
+			}
+			if (groupV2.isEmpty()) {
+				System.out.println("empty");
+				queryFlag = false;
 			}
 		}
 	}
 
-	/*private boolean compareIGMPChecksum() {
-		if (calculateIGMPChecksum() == getChecksum())
-			return true;
-		return false;
-	}
-	
-	private short calculateIGMPChecksum() {
-		int IP_header_length = (packet[14] & 0xF) * 4;
-		int total_len = (packet[16] & 0xFF) << 8 | (packet[17] & 0xFF);
-		int IGMP_pos = 14 + IP_header_length;
-		int IGMP_len = total_len - IP_header_length;
-		int sum = 0;
-		for (int i = IGMP_pos; i < IGMP_pos + IGMP_len; i += 2) {
-			if (i == IGMP_pos + 2)
-				continue;
-			if (i + 1 == packet.length)
-				sum += (packet[i] & 0xFF) << 8;
-			else
-				sum += (packet[i] & 0xFF) << 8 | (packet[i + 1] & 0xFF);
+	// remove members with false flags
+	private void autoDeleteMember() {
+		for (Map.Entry<Integer, ArrayList<host>> entry : groupV2.entrySet()) {
+			ArrayList<host> list = entry.getValue();
+			for (int i = 0; i < list.size(); i++) {
+				if (!list.get(i).flag) {
+					list.remove(i);
+					i--;
+				} else {
+					list.get(i).flag = false;
+				}
+			}
+			if (list.isEmpty())
+				groupV2.remove(entry.getKey());
 		}
-		sum = ((sum & 0x00FF0000) >> 16) + (sum & 0x0000FFFF);
-		sum = ~sum;
-		return (short)sum;
-	}
-
-	private short getChecksum() {
-		int IP_header_length = (packet[14] & 0xF) * 4;
-		int IGMP_pos = 14 + IP_header_length;
-		return (short) ((packet[IGMP_pos + 2] & 0xFF) << 8 | (packet[IGMP_pos + 3] & 0xFF));
-	}*/
-
-	private int ConvertIP(byte[] ipaddr) {
-		int ip = 0;
-		if (ipaddr.length != 4)
-			return -1;
-
-		ip = (ipaddr[0] & 0xFF) << 24 | (ipaddr[1] & 0xFF) << 16 | (ipaddr[2] & 0xFF) << 8 | (ipaddr[3] & 0xFF);
-		return ip;
-	}
-
-	private byte[] ConvertIP(int ipaddr) {
-		byte[] ip = new byte[4];
-		for (int i = 3; i >= 0; i--) {
-			ip[i] = (byte) (ipaddr & 0xFF);
-			ipaddr = ipaddr >> 8;
+		if (groupV2.isEmpty()) {
+			System.out.println("empty");
+			queryFlag = false;
 		}
-		return ip;
 	}
-
-	/*private byte[] hex2Byte(String hexString) {
-		byte[] bytes = new byte[hexString.length() / 2];
-		for (int i = 0; i < bytes.length; i++)
-			bytes[i] = (byte) Integer.parseInt(hexString.substring(2 * i, 2 * i + 2), 16);
-		return bytes;
-	}*/
-
-	/*public boolean isIGMPPacket() {
-		if (packet == null)
-			return false;
-
-		if (packet.length >= 24 && packet[23] == 0x02)
-			return true;
-		return false;
-	}*/
 }

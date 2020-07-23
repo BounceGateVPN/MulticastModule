@@ -14,9 +14,19 @@ public class TEST2 {
     	IGMPAnalysis analysis = new IGMPAnalysis();
     	Scanner scanner = new Scanner(System.in);
     	scanner.hasNext();
-    	byte[] packet = analysis.generalQuery(-536870911, 2);
+    	byte[] packet = analysis.generateQuery(0,null,-536870911, 2);
     	td.write(packet);
     	StringBuilder sb = new StringBuilder();
+	    sb.append("[ ");
+	    for (byte b : packet) {
+	        sb.append(String.format("%02X ", b));
+	    }
+	    sb.append("]");
+	    System.out.println(sb);
+	    
+	    packet = analysis.generateQuery("0.0.0.0",null,"224.0.0.1", 2);
+    	td.write(packet);
+    	sb = new StringBuilder();
 	    sb.append("[ ");
 	    for (byte b : packet) {
 	        sb.append(String.format("%02X ", b));
