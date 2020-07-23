@@ -17,7 +17,9 @@ public class Multicast {
 	String routerIP;
 	byte[] routerMAC;
 	Date delete_member_runable_time;
+	Date query_sendable_time;
 	final int INTERVAL_OF_RUNABLE_TIME = 60 * 1000;
+	final int INTERVAL_OF_WAIT_OTHER_QUERY = 120 * 1000;
 
 	public Multicast() {
 		groupV2 = new HashMap<Integer, ArrayList<host>>();
@@ -27,6 +29,7 @@ public class Multicast {
 		routerIP = "";
 		routerMAC = null;
 		delete_member_runable_time = new Date();
+		query_sendable_time = new Date();
 	}
 
 	public Multicast(String routerIP) {
@@ -95,10 +98,13 @@ public class Multicast {
 
 	// 生成Group IP為224.0.0.1的query
 	public byte[] generateQuery(int version) {
-		/*
-		 * if(queryFlag == false) return null;
-		 */
+
+		if (queryFlag == false)
+			return null;
+
 		Date now = new Date();
+		if (query_sendable_time.before(now))
+			return null;
 		if (delete_member_runable_time.after(now)) {
 			delete_member_runable_time.setTime(now.getTime() + INTERVAL_OF_RUNABLE_TIME);
 			autoDeleteMember();
@@ -137,6 +143,9 @@ public class Multicast {
 					delete_member_runable_time.setTime(now.getTime() + INTERVAL_OF_RUNABLE_TIME);
 					autoDeleteMember();
 				}
+
+				if (analysis.getSrcIPaddress() < ConvertIP.toInt(routerIP))
+					query_sendable_time.setTime(now.getTime() + INTERVAL_OF_WAIT_OTHER_QUERY);
 			}
 			// Version 3
 			if (IGMP_length >= 12) {
