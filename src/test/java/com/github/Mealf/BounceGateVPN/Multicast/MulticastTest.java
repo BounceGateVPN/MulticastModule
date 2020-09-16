@@ -3,12 +3,9 @@ package com.github.Mealf.BounceGateVPN.Multicast;
 import static org.junit.Assert.*;
 
 import java.math.BigInteger;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Date;
 
-import org.junit.After;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
@@ -109,10 +106,10 @@ public class MulticastTest {
 		val = new BigInteger(s[0], 16).toByteArray();
 		multicast.setPacket(val);
 		Thread.sleep(60000);
-		//第二次Query
+		//第二次Query, 0xc0a80065被刪除
 		val = new BigInteger(query, 16).toByteArray();
 		multicast.setPacket(val);
-		
+		//將desIP換為註冊的GroupIP
 		val = new BigInteger(s[0], 16).toByteArray();
 		multicast.setPacket(val);
 		

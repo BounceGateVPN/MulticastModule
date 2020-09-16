@@ -158,12 +158,13 @@ public class IGMPAnalysis extends Analysis {
 
 	public byte[] generateQuery(String srcIP, byte[] srcMAC, String groupIP, int version) {
 		int IPNumber = 0, srcIP_int = 0;
-		IPNumber = ConvertIP.toInt(groupIP);
-		srcIP_int = ConvertIP.toInt(srcIP);
-		
-		/*if(IPNumber == 0 || srcIP_int == 0)
+		if(!ConvertIP.isValidIP(srcMAC) || !ConvertIP.isValidIP(groupIP))
 			return null;
-		*/
+		
+		IPNumber = ConvertIP.toInteger(groupIP);
+		srcIP_int = ConvertIP.toInteger(srcIP);
+		
+		
 
 		return generateQuery(srcIP_int, srcMAC, IPNumber, version);
 	}

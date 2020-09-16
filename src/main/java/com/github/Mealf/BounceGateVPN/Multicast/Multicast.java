@@ -18,7 +18,7 @@ public class Multicast {
 	byte[] routerMAC;
 	Date delete_member_runable_time;
 	Date query_sendable_time;
-	final int INTERVAL_OF_RUNABLE_TIME = 60 * 1000;
+	final int INTERVAL_OF_RUNABLE_TIME = 55 * 1000;
 	final int INTERVAL_OF_WAIT_OTHER_QUERY = 120 * 1000;
 
 	public Multicast() {
@@ -144,7 +144,7 @@ public class Multicast {
 					autoDeleteMember();
 				}
 
-				if (analysis.getSrcIPaddress() < ConvertIP.toInt(routerIP))
+				if (ConvertIP.isValidIP(routerIP) && analysis.getSrcIPaddress() < ConvertIP.toInteger(routerIP))
 					query_sendable_time.setTime(now.getTime() + INTERVAL_OF_WAIT_OTHER_QUERY);
 			}
 			// Version 3
@@ -188,9 +188,15 @@ public class Multicast {
 
 	// 加入group
 	private void JoinGroup(byte[] GroupAddress, int version) {
+		if (!ConvertIP.isValidIP(GroupAddress))
+			return;
+
 		System.out.println(
 				ConvertIP.toString(analysis.getSrcIPaddress()) + " join group :" + ConvertIP.toString(GroupAddress));
-		int group_ip = ConvertIP.toInt(GroupAddress);
+
+		int group_ip;
+		group_ip = ConvertIP.toInteger(GroupAddress);
+
 		Map<Integer, ArrayList<host>> group;
 		if (version == 2) {
 			queryFlag = true;
@@ -200,27 +206,31 @@ public class Multicast {
 		else
 			return;
 
-		if (group_ip != -1) {
-			if (group.get(group_ip) == null)
-				group.put(group_ip, new ArrayList<host>());
-			byte[] src_ip = ConvertIP.toByteArray(analysis.getSrcIPaddress());
+		if (group.get(group_ip) == null)
+			group.put(group_ip, new ArrayList<host>());
+		byte[] src_ip = ConvertIP.toByteArray(analysis.getSrcIPaddress());
 
-			// already join
-			ArrayList<host> g = group.get(group_ip);
-			for (int i = 0; i < g.size(); i++)
-				// flag recover
-				if (Arrays.equals(g.get(i).ipaddr, src_ip)) {
-					g.get(i).flag = true;
-					return;
-				}
+		// already join
+		ArrayList<host> g = group.get(group_ip);
+		for (int i = 0; i < g.size(); i++)
+			// flag recover
+			if (Arrays.equals(g.get(i).ipaddr, src_ip)) {
+				g.get(i).flag = true;
+				return;
+			}
 
-			group.get(group_ip).add(new host(src_ip));
-		}
+		group.get(group_ip).add(new host(src_ip));
+
 	}
 
 	// 離開group
 	private void LeaveGroup(byte[] GroupAddress, int version) {
-		int group_ip = ConvertIP.toInt(GroupAddress);
+		if (!ConvertIP.isValidIP(GroupAddress))
+			return;
+
+		int group_ip;
+		group_ip = ConvertIP.toInteger(GroupAddress);
+
 		Map<Integer, ArrayList<host>> group;
 		if (version == 2)
 			group = groupV2;
