@@ -9,7 +9,8 @@ public class TEST2 {
 	public static void main(String[] args) {
 		
 		td = new TapDevice();
-    	td.startEthernetDev();
+		td.tap.tuntap_up();
+    	//td.startEthernetDev();
     	td.tap.tuntap_set_ip("192.168.87.2", 24);
     	IGMPAnalysis analysis = new IGMPAnalysis();
     	Scanner scanner = new Scanner(System.in);
